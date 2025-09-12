@@ -591,6 +591,14 @@ class RolloutPolicy(object):
             ac = PyUtils.action_dict_to_vector(ac_dict, action_keys=action_keys)
         
         # Map 2d gripper qpos to 1d gripper control signal
+        # model outputs 0.04 (open) to 0.02 (closed)
+        # sim expects -0.5 (open) to 0.5 (closed)
         ac = ac[:-1]
-        ac[-1] *= -1 
+        if ac[-1] > 0.03:
+            ac[-1] = -0.5
+        else:
+            ac[-1] = 0.5
+
+
+
         return ac
