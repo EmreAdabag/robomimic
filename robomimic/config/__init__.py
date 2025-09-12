@@ -3,6 +3,7 @@ from robomimic.config.base_config import config_factory, get_all_registered_conf
 
 # note: these imports are needed to register these classes in the global config registry
 from robomimic.config.bc_config import BCConfig
+from robomimic.config.bcmpc_config import BCMPCConfig
 from robomimic.config.bcq_config import BCQConfig
 from robomimic.config.cql_config import CQLConfig
 from robomimic.config.iql_config import IQLConfig
