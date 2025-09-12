@@ -1,3 +1,6 @@
 [submodule "panda.pytorch"]
 	path = panda.pytorch
 	url = git@github.com:EmreAdabag/panda.pytorch.git
+[submodule "pandadotpytorch"]
+	path = pandadotpytorch
+	url = git@github.com:EmreAdabag/panda-dot-pytorch.git
