@@ -592,5 +592,5 @@ class RolloutPolicy(object):
         
         # Map 2d gripper qpos to 1d gripper control signal
         ac = ac[:-1]
-        ac[:,-1] = -1 * ac[:,-1] 
+        ac[-1] *= -1 
         return ac
