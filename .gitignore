@@ -121,3 +121,10 @@ venv.bak/
 
 # private macros
 macros_private.py
+
+
+# datasets and training results
+datasets/
+results/
+.vscode/
+.DS_Store

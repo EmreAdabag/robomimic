@@ -39,7 +39,7 @@
     },
     "train": {
         "data": null,
-        "output_dir": "../diffusion_policy_trained_models",
+        "output_dir": "./results/diffusion_policy_trained_models",
         "normalize_weights_by_ds_size": false,
         "num_data_workers": 0,
         "hdf5_cache_mode": "all",
@@ -67,7 +67,7 @@
         },
         "goal_mode": null,
         "cuda": true,
-        "batch_size": 100,
+        "batch_size": 1024,
         "num_epochs": 2000,
         "seed": 1,
         "max_grad_norm": null
