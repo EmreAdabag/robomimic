@@ -57,6 +57,7 @@ import h5py
 import imageio
 import numpy as np
 from copy import deepcopy
+import matplotlib.pyplot as plt
 
 import torch
 
@@ -175,6 +176,70 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     return stats, traj
 
 
+def analyze_action_distribution(all_actions, save_path="rollout_action_distribution.png"):
+    """
+    分析并绘制 rollout 出来的 actions 的分布
+    
+    Args:
+        all_actions (list): 所有 rollout 的 actions 列表
+        save_path (str): 保存图片的路径
+    """
+    if not all_actions:
+        print("没有收集到任何 actions，无法进行分布分析")
+        return
+    
+    # 将所有 actions 合并成一个数组
+    action_all = np.concatenate(all_actions)
+    action_dim = action_all.shape[1]
+    
+    print("=" * 50)
+    print("Action 分布统计信息:")
+    print("=" * 50)
+    print("总 action 数量: {}".format(action_all.shape[0]))
+    print("action 维度: {}".format(action_dim))
+    print("action 形状: {}".format(action_all.shape))
+    
+    # 计算全局统计信息
+    action_min = np.min(action_all)
+    action_max = np.max(action_all)
+    print("action 全局最小值: {:.4f}".format(action_min))
+    print("action 全局最大值: {:.4f}".format(action_max))
+    
+    # 为每个 action 维度计算分布并绘制直方图
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    axes = axes.flatten()
+    
+    for dim in range(action_dim):
+        action_dim_data = action_all[:, dim]
+        print("action dim {} - min: {:.4f}, max: {:.4f}, mean: {:.4f}, std: {:.4f}".format(
+            dim, np.min(action_dim_data), np.max(action_dim_data), 
+            np.mean(action_dim_data), np.std(action_dim_data)))
+        
+        # 绘制直方图
+        axes[dim].hist(action_dim_data, bins=50, alpha=0.7, edgecolor='black')
+        axes[dim].set_title(f'Action axis {dim}')
+        axes[dim].set_xlabel('Value')
+        axes[dim].set_ylabel('Frequency')
+        axes[dim].grid(True, alpha=0.3)
+        
+        # 添加统计信息到图上
+        axes[dim].axvline(np.mean(action_dim_data), color='red', linestyle='--', 
+                         label=f'Mean: {np.mean(action_dim_data):.3f}')
+        axes[dim].axvline(np.median(action_dim_data), color='green', linestyle='--', 
+                         label=f'Median: {np.median(action_dim_data):.3f}')
+        axes[dim].legend()
+    
+    # 隐藏多余的子图
+    for i in range(action_dim, len(axes)):
+        axes[i].set_visible(False)
+    
+    plt.tight_layout()
+    plt.suptitle('Rollout Action Distribution by Axis', y=1.02, fontsize=16)
+    # plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print("Action 分布图已保存到: {}".format(save_path))
+    plt.show()
+
+
 def run_trained_agent(args):
     # some arg checking
     write_video = (args.video_path is not None)
@@ -227,6 +292,7 @@ def run_trained_agent(args):
         total_samples = 0
 
     rollout_stats = []
+    all_actions = []  # 收集所有 rollout 的 actions
     for i in range(rollout_num_episodes):
         stats, traj = rollout(
             policy=policy, 
@@ -239,6 +305,10 @@ def run_trained_agent(args):
             camera_names=args.camera_names,
         )
         rollout_stats.append(stats)
+        
+        # 收集当前 episode 的 actions
+        if len(traj["actions"]) > 0:
+            all_actions.append(np.array(traj["actions"]))
 
         if write_dataset:
             # store transitions
@@ -273,6 +343,15 @@ def run_trained_agent(args):
         data_grp.attrs["env_args"] = json.dumps(env.serialize(), indent=4) # environment info
         data_writer.close()
         print("Wrote dataset trajectories to {}".format(args.dataset_path))
+    
+    # 分析并绘制 action 分布
+    if all_actions:
+        print("\n" + "=" * 60)
+        print("开始分析 Rollout Actions 分布...")
+        print("=" * 60)
+        analyze_action_distribution(all_actions)
+    else:
+        print("警告: 没有收集到任何 actions，跳过分布分析")
 
 
 if __name__ == "__main__":

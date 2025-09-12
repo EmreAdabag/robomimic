@@ -75,11 +75,62 @@ if __name__ == "__main__":
     traj_lengths = []
     action_min = np.inf
     action_max = -np.inf
+    action_all = []
+    
     for ep in demos:
         traj_lengths.append(f["data/{}/actions".format(ep)].shape[0])
-        action_min = min(action_min, np.min(f["data/{}/actions".format(ep)][()]))
-        action_max = max(action_max, np.max(f["data/{}/actions".format(ep)][()]))
+        actions_ep = f["data/{}/obs/robot0_joint_pos".format(ep)][()]
+        action_min = min(action_min, np.min(actions_ep))
+        action_max = max(action_max, np.max(actions_ep))
+        action_all.append(actions_ep)
+    
     traj_lengths = np.array(traj_lengths)
+    
+    # 计算所有episode的actions统计信息
+    action_all = np.concatenate(action_all)
+    action_dim = action_all.shape[1]
+    
+    print("action min: {}".format(action_min))
+    print("action max: {}".format(action_max))
+    print("action shape: {}".format(action_all.shape))
+    print("action dimensions: {}".format(action_dim))
+    
+    # 为每个action维度计算分布并绘制直方图
+    import matplotlib.pyplot as plt
+    
+    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
+    axes = axes.flatten()
+    
+    for dim in range(action_dim):
+        action_dim_data = action_all[:, dim]
+        print("action dim {} - min: {:.4f}, max: {:.4f}, mean: {:.4f}, std: {:.4f}".format(
+            dim, np.min(action_dim_data), np.max(action_dim_data), 
+            np.mean(action_dim_data), np.std(action_dim_data)))
+        
+        # 绘制直方图
+        axes[dim].hist(action_dim_data, bins=50, alpha=0.7, edgecolor='black')
+        axes[dim].set_title(f'robot0_joint_pos axis {dim}')
+        axes[dim].set_xlabel('Value')
+        axes[dim].set_ylabel('Frequency')
+        axes[dim].grid(True, alpha=0.3)
+        
+        # 添加统计信息到图上
+        axes[dim].axvline(np.mean(action_dim_data), color='red', linestyle='--', 
+                         label=f'Mean: {np.mean(action_dim_data):.3f}')
+        axes[dim].axvline(np.median(action_dim_data), color='green', linestyle='--', 
+                         label=f'Median: {np.median(action_dim_data):.3f}')
+        axes[dim].legend()
+    
+    # 隐藏多余的子图
+    for i in range(action_dim, len(axes)):
+        axes[i].set_visible(False)
+    
+    plt.tight_layout()
+    plt.suptitle('robot0_joint_pos Distribution by Axis', y=1.02, fontsize=16)
+    plt.savefig('robot0_joint_pos_distribution.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    print("Distribution plots saved as 'robot0_joint_pos_distribution.png'")
 
     # report statistics on the data
     print("")

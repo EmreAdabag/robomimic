@@ -240,6 +240,10 @@ def playback_dataset(args):
         ObsUtils.initialize_obs_utils_with_obs_specs(obs_modality_specs=dummy_spec)
 
         env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path=args.dataset)
+        from robomimic.utils.python_utils import deep_update
+        with open("robomimic/exps/templates/diffusion_policy.json", "r") as f:
+            config = json.load(f)
+        deep_update(env_meta, config["experiment"]["env_meta_update_dict"])
         env = EnvUtils.create_env_from_metadata(env_meta=env_meta, render=args.render, render_offscreen=write_video)
 
         # some operations for playback are robosuite-specific, so determine if this environment is a robosuite env
@@ -291,7 +295,13 @@ def playback_dataset(args):
         # supply actions if using open-loop action playback
         actions = None
         if args.use_actions:
-            actions = f["data/{}/actions".format(ep)][()]
+            actions = f["data/{}/obs/robot0_joint_pos".format(ep)][()]
+        # 添加一个全零的列
+        if actions is not None:
+            # 创建一个全零的列，形状为 (actions.shape[0], 1)
+            zero_column = np.ones((actions.shape[0], 1))
+            # 将零列添加到 actions 的末尾
+            actions = np.concatenate([actions, zero_column], axis=1)
 
         playback_trajectory_with_env(
             env=env, 

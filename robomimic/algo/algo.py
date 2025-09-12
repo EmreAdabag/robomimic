@@ -589,4 +589,8 @@ class RolloutPolicy(object):
                         raise ValueError
                     ac_dict[key] = rot
             ac = PyUtils.action_dict_to_vector(ac_dict, action_keys=action_keys)
+        
+        # Map 2d gripper qpos to 1d gripper control signal
+        ac = ac[:-1]
+        ac[:,-1] = -1 * ac[:,-1] 
         return ac
