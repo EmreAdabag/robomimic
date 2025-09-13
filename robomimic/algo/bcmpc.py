@@ -212,15 +212,13 @@ class BCMPC(PolicyAlgo):
             u_weight=u_w,
         )
 
-        gripper_command = torch.zeros(u_traj.size(0), u_traj.size(1), 2, device=u_traj.device)
-        u_traj = torch.cat([u_traj, gripper_command], axis=2)
+        gripper_command = torch.zeros(x_traj.size(0), x_traj.size(1), 2, device=x_traj.device)
+        action = torch.cat([x_traj[:, :, :7], gripper_command], axis=2)
 
         # Choose supervision space based on target action dimension
         a_target = batch["actions"]
-        if a_target.shape[-1] == u_traj.shape[-1]:
-            actions = u_traj[0]
-        elif a_target.shape[-1] == q.shape[-1]:
-            actions = x_traj[1][..., :q.shape[-1]]
+        if a_target.shape[-1] == action.shape[-1]:
+            actions = action[4]
         else:
             raise AssertionError("Unsupported action dim: {} not in {{torque:{}, q:{}}}".format(
                 a_target.shape[-1], self.mpc_layer.n_ctrl, q.shape[-1]
@@ -356,9 +354,11 @@ class BCMPC(PolicyAlgo):
             v_weight=v_w,
             u_weight=u_w,
         )
+        
+        gripper_command = torch.zeros(x_traj.size(0), x_traj.size(1), 2, device=x_traj.device)
+        action = torch.cat([x_traj[:, :, :7], gripper_command], axis=2)
 
-        # Default to torque action
-        return u_traj[0]
+        return action[4]
 
 
 # class BC_Gaussian(BC):
