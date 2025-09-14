@@ -77,7 +77,7 @@ class BCMPC(PolicyAlgo):
         # MPC layer (fixed schedule: 1 goal at horizon)
         urdf_path = "pandadotpytorch/robot_description/panda_with_gripper.urdf"
         mpc_T = 10
-        mpc_dt = 0.02
+        mpc_dt = 0.01
         goal_ts = torch.tensor([mpc_T - 1], dtype=torch.long)
         self.mpc_layer = PandaEETrackingMPCLayer(
             urdf_path=urdf_path,
@@ -93,7 +93,7 @@ class BCMPC(PolicyAlgo):
         self.mpc_layer = self.mpc_layer.to(self.device)
 
         # Default baseline for MPC weights (positive)
-        self._default_mpc_weights = torch.tensor([10.0, 1.0, 0.1, 0.01], dtype=torch.float32)
+        self._default_mpc_weights = torch.tensor([4.0, 2.0, 1.e-2, 1.e-9], dtype=torch.float32, device=self.device)
 
         self.nets = self.nets.float().to(self.device)
 
@@ -150,6 +150,31 @@ class BCMPC(PolicyAlgo):
 
         return info
 
+    @staticmethod
+    def apply_delta_quat(base, delta, eps=1e-8):
+        """
+        base, delta: tensors of shape (..., 4) in (w, x, y, z) order.
+        Returns normalized quaternion: delta ∘ base (apply 'delta' to 'base').
+        """
+        # normalize inputs
+        base  = base  / torch.clamp(torch.linalg.vector_norm(base,  dim=-1, keepdim=True), min=eps)
+        delta = delta / torch.clamp(torch.linalg.vector_norm(delta, dim=-1, keepdim=True), min=eps)
+
+        # Hamilton product: q_out = delta * base
+        w1, x1, y1, z1 = delta.unbind(-1)
+        w2, x2, y2, z2 = base.unbind(-1)
+
+        w = w1*w2 - x1*x2 - y1*y2 - z1*z2
+        x = w1*x2 + x1*w2 + y1*z2 - z1*y2
+        y = w1*y2 - x1*z2 + y1*w2 + z1*x2
+        z = w1*z2 + x1*y2 - y1*x2 + z1*w2
+
+        out = torch.stack((w, x, y, z), dim=-1)
+
+        # normalize output (keeps unit length despite numerical drift)
+        out = out / torch.clamp(torch.linalg.vector_norm(out, dim=-1, keepdim=True), min=eps)
+        return out
+
     def _forward_training(self, batch):
         """
         Internal helper function for BC algo class. Compute forward pass
@@ -172,21 +197,20 @@ class BCMPC(PolicyAlgo):
 
         d_pos = mlp_out[..., 0:3]
         d_quat = mlp_out[..., 3:7]
-        d_w = mlp_out[..., 7:11]
+        w = mlp_out[..., 7:11]
 
         base_pos = obs["robot0_eef_pos"].float()
         base_quat = obs["robot0_eef_quat"].float()
         assert base_pos.shape[-1] == 3
         assert base_quat.shape[-1] == 4
 
-        goal_pos = base_pos - d_pos
-        goal_quat = base_quat - d_quat
-        goal_quat = goal_quat / (goal_quat.norm(dim=-1, keepdim=True) + 1e-8)
+        # apply deltas
+        goal_pos = base_pos + d_pos
+        goal_quat = BCMPC.apply_delta_quat(base_quat, d_quat)
 
-        default_w = self._default_mpc_weights.to(goal_pos.device, dtype=goal_pos.dtype)
-        # Ensure positive weights
-        w = F.softplus(default_w - d_w.mean(dim=0)) + 1e-6
-        pos_w, ori_w, v_w, u_w = w[0], w[1], w[2], w[3]
+        # default_w = self._default_mpc_weights.to(goal_pos.device, dtype=goal_pos.dtype)
+        # w = F.softplus(w) + 1e-6 
+        # pos_w, ori_w, v_w, u_w = w[0], w[1], w[2], w[3]
 
         # x_init must come from obs
         assert "robot0_joint_pos" in obs, "obs must include 'robot0_joint_pos' for x_init (q)"
@@ -206,10 +230,10 @@ class BCMPC(PolicyAlgo):
             x_init=x_init,
             goal_positions=goal_positions,
             goal_quaternions=goal_quaternions,
-            pos_weight=pos_w,
-            orient_weight=ori_w,
-            v_weight=v_w,
-            u_weight=u_w,
+            pos_weight=self._default_mpc_weights[0],
+            orient_weight=self._default_mpc_weights[1],
+            v_weight=self._default_mpc_weights[2],
+            u_weight=self._default_mpc_weights[3],
         )
 
         gripper_command = torch.zeros(x_traj.size(0), x_traj.size(1), 2, device=x_traj.device)
@@ -218,7 +242,7 @@ class BCMPC(PolicyAlgo):
         # Choose supervision space based on target action dimension
         a_target = batch["actions"]
         if a_target.shape[-1] == action.shape[-1]:
-            actions = action[4]
+            actions = action[9]
         else:
             raise AssertionError("Unsupported action dim: {} not in {{torque:{}, q:{}}}".format(
                 a_target.shape[-1], self.mpc_layer.n_ctrl, q.shape[-1]
@@ -319,19 +343,18 @@ class BCMPC(PolicyAlgo):
 
         d_pos = mlp_out[..., 0:3]
         d_quat = mlp_out[..., 3:7]
-        d_w = mlp_out[..., 7:11]
+        # d_w = mlp_out[..., 7:11]
 
         base_pos = obs_dict["robot0_eef_pos"].float()
         base_quat = obs_dict["robot0_eef_quat"].float()
         assert base_pos.shape[-1] == 3
         assert base_quat.shape[-1] == 4
-        goal_pos = base_pos - d_pos
-        goal_quat = base_quat - d_quat
-        goal_quat = goal_quat / (goal_quat.norm(dim=-1, keepdim=True) + 1e-8)
+        goal_pos = base_pos + d_pos
+        goal_quat = BCMPC.apply_delta_quat(base_quat, d_quat)
 
-        default_w = self._default_mpc_weights.to(goal_pos.device, dtype=goal_pos.dtype)
-        w = F.softplus(default_w - d_w.mean(dim=0)) + 1e-6
-        pos_w, ori_w, v_w, u_w = w[0], w[1], w[2], w[3]
+        # default_w = self._default_mpc_weights.to(goal_pos.device, dtype=goal_pos.dtype)
+        # w = F.softplus(default_w - d_w.mean(dim=0)) + 1e-6
+        # pos_w, ori_w, v_w, u_w = w[0], w[1], w[2], w[3]
 
         assert "robot0_joint_pos" in obs_dict
         assert ("robot0_joint_vel" in obs_dict) or ("robot0_joint_qvel" in obs_dict)
@@ -349,16 +372,16 @@ class BCMPC(PolicyAlgo):
             x_init=x_init,
             goal_positions=goal_positions,
             goal_quaternions=goal_quaternions,
-            pos_weight=pos_w,
-            orient_weight=ori_w,
-            v_weight=v_w,
-            u_weight=u_w,
+            pos_weight=self._default_mpc_weights[0],
+            orient_weight=self._default_mpc_weights[1],
+            v_weight=self._default_mpc_weights[2],
+            u_weight=self._default_mpc_weights[3],
         )
         
         gripper_command = torch.zeros(x_traj.size(0), x_traj.size(1), 2, device=x_traj.device)
         action = torch.cat([x_traj[:, :, :7], gripper_command], axis=2)
 
-        return action[4]
+        return action[9]
 
 
 # class BC_Gaussian(BC):

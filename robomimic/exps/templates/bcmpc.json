@@ -131,10 +131,10 @@
         ],
         "action_config": {
             "next_obs/robot0_joint_pos": {
-                "normalization": "min_max"
+                "normalization": null
             },
             "next_obs/robot0_gripper_qpos": {
-                "normalization": "min_max"
+                "normalization": null
             }
         },
         "goal_mode": null,
