@@ -325,10 +325,11 @@ def playback_dataset(args):
         if getattr(args, "use_mpc", False) and (mpc_layer is not None):
             # Read observations and next-step targets
             obs_q = f["data/{}/obs/robot0_joint_pos".format(ep)][()]
-            try:
-                obs_qdot = f["data/{}/obs/robot0_joint_vel".format(ep)][()]
-            except KeyError:
-                obs_qdot = None
+            # try:
+            #     obs_qdot = f["data/{}/obs/robot0_joint_vel".format(ep)][()]
+            # except KeyError:
+            #     obs_qdot = None
+            obs_qdot = None
             next_q = f["data/{}/next_obs/robot0_joint_pos".format(ep)][()]
 
             # MPC controls the first n joints only (typically 7 arm joints)

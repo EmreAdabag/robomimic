@@ -295,13 +295,11 @@ def playback_dataset(args):
         # supply actions if using open-loop action playback
         actions = None
         if args.use_actions:
+            print("Using actions")
             actions = f["data/{}/obs/robot0_joint_pos".format(ep)][()]
-        # 添加一个全零的列
-        if actions is not None:
-            # 创建一个全零的列，形状为 (actions.shape[0], 1)
-            zero_column = np.ones((actions.shape[0], 1))
-            # 将零列添加到 actions 的末尾
-            actions = np.concatenate([actions, zero_column], axis=1)
+            gripper_actions = f["data/{}/obs/robot0_gripper_qpos".format(ep)][()]
+            # print(gripper_actions)
+            actions = np.concatenate([actions, gripper_actions], axis=1)
 
         playback_trajectory_with_env(
             env=env, 

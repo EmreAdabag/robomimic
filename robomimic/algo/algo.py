@@ -590,16 +590,7 @@ class RolloutPolicy(object):
                     ac_dict[key] = rot
             ac = PyUtils.action_dict_to_vector(ac_dict, action_keys=action_keys)
         
-        # Map 2d gripper qpos to 1d gripper control signal
-        # model outputs 0.04 (open) to 0.02 (closed)
-        # sim expects -0.5 (open) to 0.5 (closed)
-        # ac = ac[:-1]
-        # if ac[-1] > 0.03:
-        #     ac[-1] = -0.5
-        # else:
-        #     ac[-1] = 0.5
-        ac = np.concatenate([ac, [-1]],axis=-1)
-
-
+        # The gripper may not hold the object lightly so i add a small scale to the gripper action
+        ac[-2:-1]*=0.96
 
         return ac

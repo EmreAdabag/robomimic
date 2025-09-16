@@ -52,6 +52,7 @@ Example usage:
         --dataset_path /path/to/output.hdf5
 """
 import argparse
+import os
 import json
 import h5py
 import imageio
@@ -69,9 +70,11 @@ import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
 from robomimic.envs.wrappers import EnvWrapper
 from robomimic.algo import RolloutPolicy
+from pandadotpytorch.mpcpanda import PandaEETrackingMPCLayer
 
 
-def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None):
+def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None,
+            mpc_layer=None, mpc_q_weight=None, mpc_v_weight=None, mpc_u_weight=None, mpc_plan_index=4, device=None):
     """
     Helper function to carry out rollouts. Supports on-screen rendering, off-screen rendering to a video, 
     and returns the rollout trajectory.
@@ -116,7 +119,47 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # get action from policy
             act = policy(ob=obs)
-            print(act)
+
+            # If MPC is enabled, treat policy joint outputs as goal and obs joint as x_init
+            if mpc_layer is not None:
+                try:
+                    # Current joint positions / velocities from observation dict
+                    q_obs = obs.get("robot0_joint_pos", None)
+                    qd_obs = obs.get("robot0_joint_vel", None)
+                    if q_obs is None:
+                        raise KeyError("robot0_joint_pos not found in observation")
+
+                    n = int(mpc_layer.n_ctrl)
+                    # Ensure shapes
+                    q_t = torch.tensor(q_obs[:n], dtype=torch.get_default_dtype(), device=device)
+                    if (qd_obs is not None) and (len(qd_obs) >= n):
+                        qd_t = torch.tensor(qd_obs[:n], dtype=torch.get_default_dtype(), device=device)
+                    else:
+                        qd_t = torch.zeros(n, dtype=torch.get_default_dtype(), device=device)
+                    x_init = torch.cat([q_t, qd_t]).unsqueeze(0)  # [1, 2n]
+
+                    # Policy-proposed joint goal (first n dims)
+                    goal_q_np = act[:n]
+                    goal_q = torch.tensor(goal_q_np, dtype=torch.get_default_dtype(), device=device)
+                    jg_BKn = goal_q.view(1, 1, n)  # [B=1, K=1, n]
+
+                    with torch.no_grad():
+                        x_mpc, u_mpc, _ = mpc_layer(x_init, jg_BKn, mpc_q_weight, mpc_v_weight, mpc_u_weight)
+
+                    # Take a mid-horizon planned state for smoothness
+                    idx = min(int(mpc_plan_index), getattr(mpc_layer, 'T', mpc_plan_index) - 1)
+                    idx = max(idx, 0)
+                    q_cmd = x_mpc[idx, 0, :n]
+
+                    # Clamp to joint limits
+                    q_lower = mpc_layer.dynamics.q_lower[:n].to(device=q_cmd.device, dtype=q_cmd.dtype)
+                    q_upper = mpc_layer.dynamics.q_upper[:n].to(device=q_cmd.device, dtype=q_cmd.dtype)
+                    q_cmd = torch.max(torch.min(q_cmd, q_upper), q_lower)
+
+                    # Replace first n joint dims with MPC-refined targets, keep gripper from policy
+                    act[:n] = q_cmd.detach().cpu().numpy()
+                except Exception as e:
+                    print("[MPC] Warning: fallback to policy action due to:", e)
 
             # play action
             next_obs, r, done, _ = env.step(act)
@@ -179,14 +222,14 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
 def analyze_action_distribution(all_actions, save_path="rollout_action_distribution.png"):
     """
-    分析并绘制 rollout 出来的 actions 的分布
-    
+    Analyze and plot the distribution of actions collected from rollouts.
+
     Args:
-        all_actions (list): 所有 rollout 的 actions 列表
-        save_path (str): 保存图片的路径
+        all_actions (list): list of actions from all rollouts
+        save_path (str): path to save the figure
     """
     if not all_actions:
-        print("没有收集到任何 actions，无法进行分布分析")
+        print("No actions collected; cannot analyze distribution")
         return
     
     # 将所有 actions 合并成一个数组
@@ -194,19 +237,19 @@ def analyze_action_distribution(all_actions, save_path="rollout_action_distribut
     action_dim = action_all.shape[1]
     
     print("=" * 50)
-    print("Action 分布统计信息:")
+    print("Action distribution statistics:")
     print("=" * 50)
-    print("总 action 数量: {}".format(action_all.shape[0]))
-    print("action 维度: {}".format(action_dim))
-    print("action 形状: {}".format(action_all.shape))
+    print("Total number of actions: {}".format(action_all.shape[0]))
+    print("Action dimension: {}".format(action_dim))
+    print("Action shape: {}".format(action_all.shape))
     
-    # 计算全局统计信息
+    # Compute global statistics
     action_min = np.min(action_all)
     action_max = np.max(action_all)
-    print("action 全局最小值: {:.4f}".format(action_min))
-    print("action 全局最大值: {:.4f}".format(action_max))
+    print("Global min of actions: {:.4f}".format(action_min))
+    print("Global max of actions: {:.4f}".format(action_max))
     
-    # 为每个 action 维度计算分布并绘制直方图
+    # For each action dimension, compute distribution and plot histogram
     fig, axes = plt.subplots(2, 4, figsize=(16, 8))
     axes = axes.flatten()
     
@@ -216,28 +259,28 @@ def analyze_action_distribution(all_actions, save_path="rollout_action_distribut
             dim, np.min(action_dim_data), np.max(action_dim_data), 
             np.mean(action_dim_data), np.std(action_dim_data)))
         
-        # 绘制直方图
+        # Plot histogram
         axes[dim].hist(action_dim_data, bins=50, alpha=0.7, edgecolor='black')
         axes[dim].set_title(f'Action axis {dim}')
         axes[dim].set_xlabel('Value')
         axes[dim].set_ylabel('Frequency')
         axes[dim].grid(True, alpha=0.3)
         
-        # 添加统计信息到图上
+        # Add statistics to the figure
         axes[dim].axvline(np.mean(action_dim_data), color='red', linestyle='--', 
                          label=f'Mean: {np.mean(action_dim_data):.3f}')
         axes[dim].axvline(np.median(action_dim_data), color='green', linestyle='--', 
                          label=f'Median: {np.median(action_dim_data):.3f}')
         axes[dim].legend()
     
-    # 隐藏多余的子图
+    # Hide extra subplots
     for i in range(action_dim, len(axes)):
         axes[i].set_visible(False)
     
     plt.tight_layout()
     plt.suptitle('Rollout Action Distribution by Axis', y=1.02, fontsize=16)
     # plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print("Action 分布图已保存到: {}".format(save_path))
+    print("Saved action distribution figure to: {}".format(save_path))
     plt.show()
 
 
@@ -285,6 +328,33 @@ def run_trained_agent(args):
     if write_video:
         video_writer = imageio.get_writer(args.video_path, fps=20)
 
+    # Initialize MPC layer if requested
+    mpc_layer = None
+    mpc_q_weight = None
+    mpc_v_weight = None
+    mpc_u_weight = None
+    if getattr(args, "use_mpc", False):
+        urdf_rel = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                                "pandadotpytorch", "robot_description", "panda_with_gripper.urdf")
+        urdf_path = urdf_rel if os.path.exists(urdf_rel) else \
+            "/home/jialeng/Desktop/robomimic/pandadotpytorch/robot_description/panda_with_gripper.urdf"
+        goal_timesteps_abs = torch.tensor([9], dtype=torch.long, device=device)
+        mpc_layer = PandaEETrackingMPCLayer(
+            urdf_path=urdf_path,
+            T=10,
+            goal_timesteps_abs=goal_timesteps_abs,
+            dt=0.01,
+            device=device,
+            with_gravity=True,
+            lqr_iter=1,
+            eps=1e-3,
+            verbose=0,
+        ).to(device)
+        # MPC cost weights
+        mpc_q_weight = torch.tensor(4.0, dtype=torch.get_default_dtype(), device=device)
+        mpc_v_weight = torch.tensor(1e-2, dtype=torch.get_default_dtype(), device=device)
+        mpc_u_weight = torch.tensor(1e-9, dtype=torch.get_default_dtype(), device=device)
+
     # maybe open hdf5 to write rollouts
     write_dataset = (args.dataset_path is not None)
     if write_dataset:
@@ -293,7 +363,7 @@ def run_trained_agent(args):
         total_samples = 0
 
     rollout_stats = []
-    all_actions = []  # 收集所有 rollout 的 actions
+    all_actions = []  # Collect actions from all rollouts
     for i in range(rollout_num_episodes):
         stats, traj = rollout(
             policy=policy, 
@@ -304,10 +374,16 @@ def run_trained_agent(args):
             video_skip=args.video_skip, 
             return_obs=(write_dataset and args.dataset_obs),
             camera_names=args.camera_names,
+            mpc_layer=mpc_layer if getattr(args, "use_mpc", False) else None,
+            mpc_q_weight=mpc_q_weight,
+            mpc_v_weight=mpc_v_weight,
+            mpc_u_weight=mpc_u_weight,
+            mpc_plan_index=4,
+            device=device,
         )
         rollout_stats.append(stats)
         
-        # 收集当前 episode 的 actions
+        # Collect actions for current episode
         if len(traj["actions"]) > 0:
             all_actions.append(np.array(traj["actions"]))
 
@@ -345,14 +421,14 @@ def run_trained_agent(args):
         data_writer.close()
         print("Wrote dataset trajectories to {}".format(args.dataset_path))
     
-    # 分析并绘制 action 分布
+    # Analyze and plot action distribution
     if all_actions:
         print("\n" + "=" * 60)
-        print("开始分析 Rollout Actions 分布...")
+        print("Starting analysis of rollout action distribution...")
         print("=" * 60)
         analyze_action_distribution(all_actions)
     else:
-        print("警告: 没有收集到任何 actions，跳过分布分析")
+        print("Warning: no actions collected; skipping distribution analysis")
 
 
 if __name__ == "__main__":
@@ -445,6 +521,13 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="(optional) set seed for rollouts",
+    )
+
+    # Use MPC to refine policy's joint-space goals during rollout
+    parser.add_argument(
+        "--use-mpc",
+        action='store_true',
+        help="enable MPC layer: policy joints as goal, obs joints as x_init",
     )
 
     args = parser.parse_args()
