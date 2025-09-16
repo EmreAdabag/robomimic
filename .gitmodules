@@ -2,3 +2,7 @@
 	path = pandadotpytorch
 	url = git@github.com:EmreAdabag/panda-dot-pytorch.git
 	branch = jointspace
+
+[submodule "robosuite"]
+	path = robosuite
+	url = git@github.com:tomakeIT/robosuite.git
