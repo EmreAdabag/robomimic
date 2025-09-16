@@ -6,4 +6,4 @@
 [submodule "robosuite"]
 	path = robosuite
 	url = git@github.com:tomakeIT/robosuite.git
-	branch = my-change
+	branch = master
