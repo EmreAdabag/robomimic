@@ -116,6 +116,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # get action from policy
             act = policy(ob=obs)
+            print(act)
 
             # play action
             next_obs, r, done, _ = env.step(act)

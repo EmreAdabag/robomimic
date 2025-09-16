@@ -1,3 +1,4 @@
 [submodule "pandadotpytorch"]
 	path = pandadotpytorch
 	url = git@github.com:EmreAdabag/panda-dot-pytorch.git
+	branch = jointspace

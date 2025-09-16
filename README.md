@@ -80,7 +80,11 @@ To run without GPU (CPU only), run:
 To run with GPU (if available), run:
 `docker run --gpus all -it robomimic`
 
-## Troubleshooting
+## Tips for updating submodule
+```
+git submodule sync --recursive
+git submodule update --init --remote --recursive
+```
 
 Please see the [troubleshooting](https://robomimic.github.io/docs/miscellaneous/troubleshooting.html) section for common fixes, or [submit an issue](https://github.com/ARISE-Initiative/robomimic/issues) on our github page.
 
