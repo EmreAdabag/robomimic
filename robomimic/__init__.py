@@ -1,5 +1,18 @@
 __version__ = "0.5.0"
 
+# Ensure bundled robosuite submodule is importable when running from source tree
+# This avoids requiring users to manually set PYTHONPATH to the submodule path
+import os
+import sys
+try:
+    _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _robosuite_dir = os.path.join(_repo_root, "robosuite")
+    if os.path.isdir(_robosuite_dir) and (_robosuite_dir not in sys.path):
+        sys.path.insert(0, _robosuite_dir)
+except Exception:
+    # Best-effort only; do not fail robomimic import if this path tweak breaks
+    pass
+
 
 # stores released dataset links and rollout horizons in global dictionary.
 # Structure is given below for each type of dataset:
