@@ -591,6 +591,6 @@ class RolloutPolicy(object):
             ac = PyUtils.action_dict_to_vector(ac_dict, action_keys=action_keys)
         
         # The gripper may not hold the object lightly so i add a small scale to the gripper action
-        ac[-2:-1]*=0.96
+        # ac[-2:-1]*=0.96
 
         return ac

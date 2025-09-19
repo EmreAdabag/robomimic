@@ -12,7 +12,7 @@
         "save": {
             "enabled": true,
             "every_n_seconds": null,
-            "every_n_epochs": 50,
+            "every_n_epochs": 20,
             "epochs": [],
             "on_best_validation": false,
             "on_best_rollout_return": false,
@@ -28,11 +28,11 @@
         "video_skip": 5,
         "rollout": {
             "enabled": true,
-            "n": 50,
+            "n": 5,
             "horizon": 400,
             "rate": 50,
             "warmstart": 0,
-            "terminate_on_success": true
+            "terminate_on_success": false
         },
         "env_meta_update_dict": {
             "env_kwargs": {
@@ -95,7 +95,20 @@
                             "ramp_ratio": 0.2,
                             "input_ref_frame": "world",
                             "gripper": {
-                                "type": "GRIP"
+                                "type": "JOINT_POSITION",
+                                "input_max": 1,
+                                "input_min": -1,
+                                "output_max": 0.05,
+                                "output_min": -0.05,
+                                "kp": 50,
+                                "damping_ratio": 1,
+                                "impedance_mode": "fixed",
+                                "kp_limits": [0, 300],
+                                "damping_ratio_limits": [0, 10],
+                                "qpos_limits": null,
+                                "interpolation": null,
+                                "ramp_ratio": 0.2,
+                                "input_type": "absolute"
                             }
                         }
                     }
@@ -106,7 +119,7 @@
     },
     "train": {
         "data": null,
-        "output_dir": "/home/jialeng/Desktop/robomimic/results/bc_trained_models",
+        "output_dir": "/home/jialeng/Desktop/robomimic/results/bc_mlp_trained_models",
         "normalize_weights_by_ds_size": false,
         "num_data_workers": 0,
         "hdf5_cache_mode": "all",
@@ -115,30 +128,33 @@
         "hdf5_normalize_obs": false,
         "hdf5_filter_key": null,
         "hdf5_validation_filter_key": null,
-        "seq_length": 10,
+        "seq_length": 1,
         "pad_seq_length": true,
-        "frame_stack": 10,
+        "frame_stack": 1,
         "pad_frame_stack": true,
         "dataset_keys": [
             "rewards",
-            "dones",
-            "next_obs/robot0_joint_pos",
-            "next_obs/robot0_gripper_qpos"
+            "dones"
         ],
         "action_keys": [
-            "next_obs/robot0_joint_pos"
+            "next_obs/robot0_joint_pos",
+            "next_obs/robot0_gripper_qpos"
         ],
         "action_config": {
             "next_obs/robot0_joint_pos": {
                 "normalization": "min_max"
+            },
+            "next_obs/robot0_gripper_qpos": {
+                "normalization": "gaussian"
             }
         },
         "goal_mode": null,
         "cuda": true,
-        "batch_size": 100,
-        "num_epochs": 1000,
+        "batch_size": 128,
+        "num_epochs": 200,
         "seed": 1,
-        "max_grad_norm": null
+        "max_grad_norm": null,
+        "next_obs_supervision_horizon": 1
     },
     "algo": {
         "optim_params": {
@@ -226,7 +242,7 @@
             }
         },
         "transformer": {
-            "enabled": true,
+            "enabled": false,
             "context_length": 10,
             "embed_dim": 512,
             "num_layers": 6,
@@ -245,7 +261,8 @@
         "modalities": {
             "obs": {
                 "low_dim": [
-                    "robot0_joint_pos",
+                    "robot0_eef_pos",
+                    "robot0_eef_quat",
                     "object"
                 ],
                 "rgb": [],
