@@ -36,6 +36,7 @@
         },
         "env_meta_update_dict": {
             "env_kwargs": {
+                "control_freq": 20,
                 "controller_configs": {
                     "body_parts": {
                         "right": {
@@ -153,8 +154,7 @@
         "batch_size": 128,
         "num_epochs": 200,
         "seed": 1,
-        "max_grad_norm": null,
-        "next_obs_supervision_horizon": 4
+        "max_grad_norm": null
     },
     "algo": {
         "optim_params": {
@@ -176,8 +176,9 @@
         },
         "horizon": {
             "observation_horizon": 2,
-            "action_horizon": 8,
-            "prediction_horizon": 16
+            "action_horizon": 4,
+            "prediction_horizon": 4,
+            "action_sample_rate": 3
         },
         "unet": {
             "enabled": true,

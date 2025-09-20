@@ -245,7 +245,7 @@ def playback_dataset(args):
 
         env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path=args.dataset)
         from robomimic.utils.python_utils import deep_update
-        with open("robomimic/exps/templates/diffusion_policy.json", "r") as f:
+        with open("robomimic/exps/jointspace/diffusion_policy.json", "r") as f:
             config = json.load(f)
         deep_update(env_meta, config["experiment"]["env_meta_update_dict"])
         env = EnvUtils.create_env_from_metadata(env_meta=env_meta, render=args.render, render_offscreen=write_video)
@@ -352,7 +352,7 @@ def playback_dataset(args):
                 jg_BKn = goal_q.view(1, 1, n)
 
                 with torch.no_grad():
-                    x_mpc, u_mpc, _ = mpc_layer(x_init, jg_BKn, mpc_q_weight, mpc_v_weight, mpc_u_weight)
+                    x_mpc, u_mpc, _ = mpc_layer(x_init=x_init, goal_positions=jg_BKn, mpc_q_weight=mpc_q_weight, v_weight=mpc_v_weight, u_weight=mpc_u_weight)
 
                 # Use the 5th planned step as the absolute joint target (smoother)
                 idx = min(4, mpc_layer.T - 1) if hasattr(mpc_layer, 'T') else 4

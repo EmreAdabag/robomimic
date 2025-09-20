@@ -241,7 +241,7 @@ def playback_dataset(args):
 
         env_meta = FileUtils.get_env_metadata_from_dataset(dataset_path=args.dataset)
         from robomimic.utils.python_utils import deep_update
-        with open("robomimic/exps/templates/diffusion_policy.json", "r") as f:
+        with open("robomimic/exps/jointspace/diffusion_policy.json", "r") as f:
             config = json.load(f)
         deep_update(env_meta, config["experiment"]["env_meta_update_dict"])
         env = EnvUtils.create_env_from_metadata(env_meta=env_meta, render=args.render, render_offscreen=write_video)

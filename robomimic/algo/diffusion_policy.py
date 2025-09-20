@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from diffusers.training_utils import EMAModel
+from transformers.integrations import tpu
 
 import robomimic.models.obs_nets as ObsNets
 import robomimic.models.diffusion_policy_nets as DPNets
@@ -140,7 +141,12 @@ class DiffusionPolicyUNet(PolicyAlgo):
         input_batch = dict()
         input_batch["obs"] = {k: batch["obs"][k][:, :To, :] for k in batch["obs"]}
         input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present
-        input_batch["actions"] = batch["actions"][:, :Tp, :]
+
+        assert batch["actions"].shape[1] >= To + (Tp-1)*self.algo_config.horizon.action_sample_rate
+        assert (Ta<=Tp)
+        sample_idx = torch.arange(0,Tp)*self.algo_config.horizon.action_sample_rate+To-1
+        input_batch["actions"] = batch["actions"][:, sample_idx, :]
+
         
         # check if actions are normalized to [-1,1]
         if not self.action_check_done:
@@ -362,9 +368,7 @@ class DiffusionPolicyUNet(PolicyAlgo):
             ).prev_sample
 
         # process action using Ta
-        start = To - 1
-        end = start + Ta
-        action = naction[:,start:end]
+        action = naction[:, :Ta]
         return action
 
     def serialize(self):

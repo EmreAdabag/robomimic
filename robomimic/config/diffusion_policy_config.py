@@ -47,6 +47,7 @@ class DiffusionPolicyConfig(BaseConfig):
         self.algo.horizon.observation_horizon = 2
         self.algo.horizon.action_horizon = 8
         self.algo.horizon.prediction_horizon = 16
+        self.algo.horizon.action_sample_rate = 1
         
         # UNet parameters
         self.algo.unet.enabled = True
