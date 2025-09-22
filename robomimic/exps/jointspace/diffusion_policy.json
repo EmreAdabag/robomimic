@@ -176,9 +176,9 @@
         },
         "horizon": {
             "observation_horizon": 2,
-            "action_horizon": 4,
-            "prediction_horizon": 4,
-            "action_sample_rate": 3
+            "action_horizon": 8,
+            "prediction_horizon": 16,
+            "action_sample_rate": 1
         },
         "unet": {
             "enabled": true,

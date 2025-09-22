@@ -52,11 +52,11 @@ def sparse_sample_dataset(in_path: str, out_path: str, step: int) -> None:
             N = len(idx)
 
             # copy attrs
-            # 查看所有的attrs并全部复制到g_out
+            # copy all attributes to g_out
             for attr_key in g_in.attrs.keys():
                 g_out.attrs[attr_key] = g_in.attrs[attr_key]
                 # print(f"Copied attr: {attr_key}")
-            # 更新num_samples为稀疏采样后的数量
+            # update num_samples to reflect the sparse-sampled count
             g_out.attrs['num_samples'] = N
 
             # obs subkeys

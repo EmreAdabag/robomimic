@@ -1,0 +1,1 @@
+我现在想让你帮我做这么一件事，这个事的目标是是得现在的模型在inference的过程中能够预测未来更远的动作。我初步的构想是可以在dataloader或者dataset的层面来完成，对一一次模型的interation，我输入sparse的监督信号
