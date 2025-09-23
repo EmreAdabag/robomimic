@@ -1,0 +1,271 @@
+{
+    "algo_name": "diffusion_policy",
+    "experiment": {
+        "name": "test",
+        "validate": false,
+        "logging": {
+            "terminal_output_to_txt": true,
+            "log_tb": true,
+            "log_wandb": false,
+            "wandb_proj_name": "debug"
+        },
+        "save": {
+            "enabled": true,
+            "every_n_seconds": null,
+            "every_n_epochs": 500000,
+            "epochs": [5, 20],
+            "on_best_validation": false,
+            "on_best_rollout_return": false,
+            "on_best_rollout_success_rate": true
+        },
+        "epoch_every_n_steps": 100,
+        "validation_epoch_every_n_steps": 10,
+        "env": null,
+        "additional_envs": null,
+        "render": false,
+        "render_video": true,
+        "keep_all_videos": false,
+        "video_skip": 5,
+        "rollout": {
+            "enabled": false,
+            "n": 2,
+            "horizon": 400,
+            "rate": 10,
+            "warmstart": 0,
+            "terminate_on_success": true
+        },
+        "env_meta_update_dict": {
+            "env_kwargs": {
+                "controller_configs": {
+                    "body_parts": {
+                        "right": {
+                            "type": "JOINT_POSITION",
+                            "input_max": [
+                                2.8973,
+                                1.7628,
+                                2.8973,
+                                0.0698,
+                                2.8973,
+                                3.7525,
+                                2.8973
+                            ],
+                            "input_min": [
+                                -2.8973,
+                                -1.7628,
+                                -2.8973,
+                                -3.0718,
+                                -2.8973,
+                                -0.0175,
+                                -2.8973
+                            ],
+                            "output_max": [
+                                -2.8973,
+                                -1.7628,
+                                -2.8973,
+                                -3.0718,
+                                -2.8973,
+                                -0.0175,
+                                -2.8973
+                            ],
+                            "output_min": [
+                                -2.8973,
+                                -1.7628,
+                                -2.8973,
+                                -3.0718,
+                                -2.8973,
+                                -0.0175,
+                                -2.8973
+                            ],
+                            "kp": 15,
+                            "damping": 1,
+                            "impedance_mode": "fixed",
+                            "kp_limits": [
+                                0,
+                                300
+                            ],
+                            "damping_limits": [
+                                0,
+                                10
+                            ],
+                            "position_limits": null,
+                            "orientation_limits": null,
+                            "uncouple_pos_ori": false,
+                            "input_type": "absolute",
+                            "interpolation": null,
+                            "ramp_ratio": 0.2,
+                            "input_ref_frame": "world",
+                            "gripper": {
+                                "type": "JOINT_POSITION",
+                                "input_max": 1,
+                                "input_min": -1,
+                                "output_max": 0.05,
+                                "output_min": -0.05,
+                                "kp": 50,
+                                "damping_ratio": 1,
+                                "impedance_mode": "fixed",
+                                "kp_limits": [0, 300],
+                                "damping_ratio_limits": [0, 10],
+                                "qpos_limits": null,
+                                "interpolation": null,
+                                "ramp_ratio": 0.2,
+                                "input_type": "absolute"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "ckpt_path": null
+    },
+    "train": {
+        "data": null,
+        "output_dir": "./results/diffusion_policy_jointspace_trained_models",
+        "normalize_weights_by_ds_size": false,
+        "num_data_workers": 0,
+        "hdf5_cache_mode": "all",
+        "hdf5_use_swmr": true,
+        "hdf5_load_next_obs": true,
+        "hdf5_normalize_obs": false,
+        "hdf5_filter_key": null,
+        "hdf5_validation_filter_key": null,
+        "seq_length": 16,
+        "pad_seq_length": true,
+        "frame_stack": 2,
+        "pad_frame_stack": true,
+        "dataset_keys": [
+            "rewards",
+            "dones",
+            "next_obs/robot0_joint_pos",
+            "next_obs/robot0_gripper_qpos"
+        ],
+        "action_keys": [
+            "next_obs/robot0_joint_pos",
+            "next_obs/robot0_gripper_qpos"
+        ],
+        "action_config": {
+            "next_obs/robot0_joint_pos": {
+                "normalization": "min_max"
+            },
+            "next_obs/robot0_gripper_qpos": {
+                "normalization": "min_max"
+            }
+        },
+        "goal_mode": null,
+        "cuda": true,
+        "batch_size": 32,
+        "num_epochs": 2000,
+        "seed": 1,
+        "max_grad_norm": 1.0
+    },
+    "algo": {
+        "optim_params": {
+            "policy": {
+                "optimizer_type": "adamw",
+                "learning_rate": {
+                    "initial": 0.0001,
+                    "decay_factor": 0.1,
+                    "step_every_batch": true,
+                    "scheduler_type": "cosine",
+                    "num_cycles": 0.5,
+                    "warmup_steps": 500,
+                    "epoch_schedule": []
+                },
+                "regularization": {
+                    "L2": 1e-06
+                }
+            }
+        },
+        "horizon": {
+            "observation_horizon": 2,
+            "action_horizon": 8,
+            "prediction_horizon": 16
+        },
+        "unet": {
+            "enabled": true,
+            "diffusion_step_embed_dim": 256,
+            "down_dims": [
+                256,
+                512,
+                1024
+            ],
+            "kernel_size": 5,
+            "n_groups": 8
+        },
+        "ema": {
+            "enabled": true,
+            "power": 0.75
+        },
+        "ddpm": {
+            "enabled": true,
+            "num_train_timesteps": 100,
+            "num_inference_timesteps": 100,
+            "beta_schedule": "squaredcos_cap_v2",
+            "clip_sample": true,
+            "prediction_type": "epsilon"
+        },
+        "ddim": {
+            "enabled": false,
+            "num_train_timesteps": 100,
+            "num_inference_timesteps": 10,
+            "beta_schedule": "squaredcos_cap_v2",
+            "clip_sample": true,
+            "set_alpha_to_one": true,
+            "steps_offset": 0,
+            "prediction_type": "epsilon"
+        }
+    },
+    "observation": {
+        "modalities": {
+            "obs": {
+                "low_dim": [
+                    "robot0_joint_pos",
+                    "robot0_joint_vel",
+                    "robot0_eef_pos",
+                    "robot0_eef_quat",
+                    "robot0_gripper_qpos",
+                    "object"
+                ],
+                "rgb": [],
+                "depth": [],
+                "scan": []
+            },
+            "goal": {
+                "low_dim": [],
+                "rgb": [],
+                "depth": [],
+                "scan": []
+            }
+        },
+        "encoder": {
+            "low_dim": {
+                "core_class": null,
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            },
+            "rgb": {
+                "core_class": "VisualCore",
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            },
+            "depth": {
+                "core_class": "VisualCore",
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            },
+            "scan": {
+                "core_class": "ScanCore",
+                "core_kwargs": {},
+                "obs_randomizer_class": null,
+                "obs_randomizer_kwargs": {}
+            }
+        }
+    },
+    "meta": {
+        "hp_base_config_file": null,
+        "hp_keys": [],
+        "hp_values": []
+    }
+}

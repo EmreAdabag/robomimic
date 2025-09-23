@@ -250,9 +250,35 @@ def backprop_for_loss(net, optim, loss, max_grad_norm=None, retain_graph=False):
         grad_norms (float): average gradient norms from backpropagation
     """
 
+    if not torch.isfinite(loss):
+        optim.zero_grad(set_to_none=True)        # clear any stale grads
+        # optional: log, reduce LR, reinit scaler, etc.
+        return -1.0
+
     # backprop
     optim.zero_grad()
     loss.backward(retain_graph=retain_graph)
+
+    # 3) detect bad grads (handle None grads safely)
+    has_bad_grad = False
+
+    for p in net.parameters():
+        if (p.grad is None) or (p.grad.numel() == 0):
+            continue
+        # Check for NaN/Inf
+        if not torch.isfinite(p.grad).all():
+            print("BAD GRAD")
+            breakpoint()
+            has_bad_grad = True
+            break
+
+    if has_bad_grad:
+        # sanitize and skip the step
+        for p in net.parameters():
+            if p.grad is not None:
+                # zero them or repair (nan_to_num sets NaN->0, +/-inf->finite)
+                p.grad.data.nan_to_num_(nan=0.0, posinf=0.0, neginf=0.0)
+        return -1.0
 
     # gradient clipping
     if max_grad_norm is not None:
