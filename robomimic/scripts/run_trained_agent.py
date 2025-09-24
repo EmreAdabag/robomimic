@@ -71,6 +71,7 @@ from robomimic.envs.env_base import EnvBase
 from robomimic.envs.wrappers import EnvWrapper
 from robomimic.algo import RolloutPolicy
 from pandadotpytorch.mpcpanda import PandaEETrackingMPCLayer
+from robomimic.utils.python_utils import deep_update
 
 
 def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None,
@@ -298,8 +299,27 @@ def run_trained_agent(args):
     # device
     device = TorchUtils.get_torch_device(try_to_use_cuda=True)
 
-    # restore policy
-    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True)
+    # load checkpoint dict first to allow config updates before building policy
+    ckpt_dict = FileUtils.load_dict_from_checkpoint(ckpt_path=ckpt_path)
+
+    # Optionally deep-merge external config JSON into checkpoint config before policy/env creation
+    if getattr(args, "config_json", None):
+        try:
+            with open(args.config_json, "r") as f:
+                ext_cfg = json.load(f)
+            base_cfg = json.loads(ckpt_dict.get("config", "{}")) if isinstance(ckpt_dict.get("config"), str) else (ckpt_dict.get("config") or {})
+            if not isinstance(base_cfg, dict):
+                base_cfg = {}
+            if isinstance(ext_cfg, dict):
+                deep_update(base_cfg, ext_cfg)
+                ckpt_dict["config"] = json.dumps(base_cfg)
+            else:
+                print("[warn] --config-json must be a JSON object; skipping config merge")
+        except Exception as e:
+            print("[warn] Failed to apply --config-json:", e)
+
+    # restore policy using possibly-updated ckpt_dict
+    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_dict=ckpt_dict, device=device, verbose=True)
 
     # read rollout settings
     rollout_num_episodes = args.n_rollouts
@@ -528,6 +548,14 @@ if __name__ == "__main__":
         "--use-mpc",
         action='store_true',
         help="enable MPC layer: policy joints as goal, obs joints as x_init",
+    )
+
+    # Optional: path to a JSON whose content will be deep-merged into checkpoint config
+    parser.add_argument(
+        "--config-json",
+        type=str,
+        default=None,
+        help="path to JSON to deep-merge into checkpoint config before policy/env creation",
     )
 
     args = parser.parse_args()
